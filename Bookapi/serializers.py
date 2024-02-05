@@ -58,7 +58,7 @@ class BookSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = Book
-        fields = ['id','book_name','genre_name','price','author','price_details']
+        fields = ['id','book_name','genre_name','price','author','price_details','language']
     
     def get_price_details(self,instance):
         limit = 100

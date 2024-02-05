@@ -10,6 +10,8 @@ from django.http.response import Http404
 from django.http import Http404
 from django.shortcuts import get_object_or_404
 from rest_framework.generics import *
+from rest_framework import filters
+from django_filters.rest_framework import DjangoFilterBackend
 
 class AuthorCreateView(generics.CreateAPIView):
     queryset = Author.objects.all()
@@ -48,7 +50,7 @@ class GenreCreateView(generics.CreateAPIView):
 
     def create(self, request, *args, **kwargs):
         genre_name = request.data.get('genre_name')
-        existing_genre = Genre.objects.filter(genre_name=genre_name).first()
+        existing_genre = Genre.objects.filter(genre_name=genre_name).exists()
 
     
         if existing_genre:
@@ -288,7 +290,18 @@ class BookCreateView(generics.CreateAPIView):
 class BookListView(generics.ListAPIView):
     queryset = Book.objects.only('book_name','author','language','price').select_related('author').prefetch_related('genre')
     serializer_class = BookSerializer
- 
+    filter_backends = [filters.SearchFilter]
+    search_fields = ['book_name', 'author__author_name', 'genre__genre_name']
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        ordering = self.request.query_params.get('ordering', 'book_name')
+        queryset = queryset.order_by(ordering)
+
+        return queryset
+
+    
 class BookRetrieveView(generics.RetrieveAPIView):
     queryset = Book.objects.all()
     serializer_class = BookSerializer
