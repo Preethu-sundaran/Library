@@ -1,5 +1,10 @@
 import logging
 import datetime
+import openpyxl
+import xlwt
+import csv
+from openpyxl import Workbook
+from django.http import HttpResponse
 from rest_framework import generics,status
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -8,6 +13,8 @@ from rest_framework import generics, permissions
 from rest_framework.permissions import IsAuthenticated,AllowAny,IsAdminUser
 from rest_framework.generics import *
 from rest_framework import filters
+from rest_framework import status
+from rest_framework.pagination import CursorPagination
 from django.contrib import messages
 from django.http.response import Http404
 from django.http import Http404
@@ -16,11 +23,11 @@ from django.shortcuts import render
 from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Q
 from django.contrib.auth.hashers import check_password
-from .models import *
-from .serializers import *
 from django.contrib.auth.models import Permission
 from django.contrib.contenttypes.models import ContentType
-from rest_framework import status
+from .models import *
+from .serializers import *
+from django.db.models import F
 
 logger = logging.getLogger(__name__)
 
@@ -389,12 +396,21 @@ class BookCreateView(generics.CreateAPIView):
     def perform_create(self, serializer):
         serializer.save()
 
+
+class BookListPagination(CursorPagination):
+    page_size = 5
+    ordering = 'id'
+
+
 class BookListView(generics.ListAPIView):
-    queryset = Book.objects.only('book_name','author','language','price').select_related('author').prefetch_related('genre')
+    queryset = Book.objects.only('book_name', 'author', 'language', 'price').select_related('author').prefetch_related('genre').order_by(F('price').asc())
     serializer_class = BookSerializer
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
     filter_backends = [filters.SearchFilter]
     search_fields = ['book_name', 'author__author_name', 'genre__genre_name']
+    pagination_class = BookListPagination
+
+
     
     def get_queryset(self):
         queryset = super().get_queryset()
@@ -404,7 +420,93 @@ class BookListView(generics.ListAPIView):
 
         return queryset
 
-    
+class ExportBookToExcelView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        queryset = Book.objects.only('book_name','author','language','price').select_related('author').prefetch_related('genre')
+        serializer = BookSerializer(queryset, many=True)
+
+       
+        wb = Workbook()
+        ws = wb.active
+
+        headers = ['ID', 'Book Name', 'Author', 'Language', 'Price']
+
+        ws.append(headers)
+
+        for book in serializer.data:
+            ws.append([
+                book['id'],
+                book['book_name'],
+                book['author']['author_name'],
+                book['language'],
+                book['price']
+            ])
+
+        response = HttpResponse(content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+        response['Content-Disposition'] = 'attachment; filename=book_list.xlsx'
+
+        wb.save(response)
+
+        return response   
+
+
+class ExportBookIntoXlwtView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self,request):
+        queryset = Book.objects.only('book_name','author','language','price').select_related('author').prefetch_related('genre')
+        serializer = BookSerializer(queryset,many=True)
+
+        wb = xlwt.Workbook()
+        ws = wb.add_sheet('Book List')
+
+        headers = ['ID','BOOK NAME','AUTHOR','LANGUAGE','PRICE']
+
+        for col,header in enumerate(headers):
+            ws.write(0,col,header)
+
+        for row,book in enumerate(serializer.data,start=1):
+            ws.write(row,0,book['id'])
+            ws.write(row,1,book['book_name'])
+            ws.write(row,2,book['author']['author_name'])
+            ws.write(row,3,book['language'])
+            ws.write(row,4,book['price'])
+
+        response = HttpResponse(content_type='application/vnd.ms-excel')
+        response['Content-Disposition'] = 'attachment;filename=xlwt_book_list.xls'
+        wb.save(response)
+        return response
+
+        
+class ExportBookIntoCSVView(APIView):
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        queryset = Book.objects.only('book_name', 'author', 'language', 'price').select_related('author').prefetch_related('genre')
+        serializer = BookSerializer(queryset, many=True)
+
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="csv_listbook.csv"'
+
+        writer = csv.writer(response ,delimiter=',')
+        
+       
+        writer.writerow(['ID', 'Book Name', 'Author', 'Language', 'Price'])
+
+        for book in serializer.data:
+            writer.writerow([
+                book['id'],
+                book['book_name'],
+                book['author']['author_name'],
+                book['language'],
+                book['price']
+            ])
+
+        return response
+
 class BookRetrieveView(generics.RetrieveAPIView):
     queryset = Book.objects.all()
     serializer_class = BookSerializer

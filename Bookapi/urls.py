@@ -37,6 +37,11 @@ urlpatterns = [
     path('update_book/<int:pk>/',BookUpdateView.as_view(),name='update-book'),
     path('delete_book/<int:pk>/',BookDeleteView.as_view(),name='delete-book'),
 
+    path('export-books-to-excel/', ExportBookToExcelView.as_view(), name='export-books-to-excel'),
+    path('export-books-to-xlwt/', ExportBookIntoXlwtView.as_view(), name='export-books-to-xlwt'),
+    path('export-books-to-csv/', ExportBookIntoCSVView.as_view(), name='export-books-to-csv'),
+
+
     
     
     
